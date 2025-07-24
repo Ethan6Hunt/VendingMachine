@@ -1,0 +1,127 @@
+module vending_machine (
+    input  wire        clk,
+    input  wire        rst_n,    // active-low reset
+    input  wire        coin5,    // pulse: insert ₹5
+    input  wire        coin10,   // pulse: insert ₹10
+    input  wire        selA,     // buy product A (₹5)
+    input  wire        selB,     // buy product B (₹10)
+    input  wire        selC,     // buy product C (₹15)
+    input  wire        cancel,   // cancel transaction
+    output reg         dispA,    // high for 1 cycle when A dispensed
+    output reg         dispB,    // high for 1 cycle when B dispensed
+    output reg         dispC,    // high for 1 cycle when C dispensed
+    output reg [5:0]   change    // amount (in ₹) returned concurrently
+);
+
+    // State encoding = current credit in multiples of ₹5:
+    localparam [2:0]
+        S0  = 3'd0,   // ₹0
+        S5  = 3'd1,   // ₹5
+        S10 = 3'd2,   // ₹10
+        S15 = 3'd3,   // ₹15
+        S20 = 3'd4;   // ₹20 (max)
+
+    reg [2:0] state, next_state;
+    reg [5:0] credit, next_credit;
+
+    // Synchronous state & credit registers
+    always @(posedge clk or negedge rst_n) begin
+        if (!rst_n) begin
+            state  <= S0;
+            credit <= 6'd0;
+        end else begin
+            state  <= next_state;
+            credit <= next_credit;
+        end
+    end
+
+    // Combinational next-state logic, outputs
+    always @(*) begin
+        // defaults
+        next_state  = state;
+        next_credit = credit;
+        dispA  = 1'b0;
+        dispB  = 1'b0;
+        dispC  = 1'b0;
+        change = 6'd0;
+
+        // 1) Coin insertion (only when no dispense/cancel in same cycle)
+        if (!selA && !selB && !selC && !cancel) begin
+            case (state)
+              S0: begin
+    if (coin5) begin
+        next_credit = 6'd5;
+        next_state  = S5;
+    end else if (coin10) begin
+        next_credit = 6'd10;
+        next_state  = S10;
+    end
+end
+
+S5: begin
+    if (coin5) begin
+        next_credit = 6'd10;
+        next_state  = S10;
+    end else if (coin10) begin
+        next_credit = 6'd15;
+        next_state  = S15;
+    end
+end
+
+S10: begin
+    if (coin5) begin
+        next_credit = 6'd15;
+        next_state  = S15;
+    end else if (coin10) begin
+        next_credit = 6'd20;
+        next_state  = S20;
+    end
+end
+
+S15: begin
+    if (coin5 || coin10) begin
+        next_credit = 6'd20;  // capped at ₹20
+        next_state  = S20;
+    end
+end
+
+S20: begin
+    // No credit increase beyond ₹20
+    next_credit = 6'd20;
+    next_state  = S20;
+end
+
+                S20: ; // saturates at ₹20
+            endcase
+        end
+
+        // 2) Product selection
+        if (selA && credit >= 6'd5) begin
+            dispA      = 1'b1;
+            change     = credit - 6'd5;
+            next_credit= 6'd0;
+            next_state = S0;
+        end
+        else if (selB && credit >= 6'd10) begin
+            dispB      = 1'b1;
+            change     = credit - 6'd10;
+            next_credit= 6'd0;
+            next_state = S0;
+        end
+        else if (selC && credit >= 6'd15) begin
+            dispC      = 1'b1;
+            change     = credit - 6'd15;
+            next_credit= 6'd0;
+            next_state = S0;
+        end
+
+        // 3) Cancel transaction (highest priority)
+        if (cancel && credit > 0) begin
+            change     = credit;
+            next_credit= 6'd0;
+            next_state = S0;
+            dispA = 1'b0;
+            dispB = 1'b0;
+            dispC = 1'b0;
+        end
+    end

@@ -1,0 +1,98 @@
+module tb_vending_machine;
+
+    // Inputs
+    reg clk, rst_n;
+    reg coin5, coin10;
+    reg selA, selB, selC, cancel;
+
+    // Outputs
+    wire dispA, dispB, dispC;
+    wire [5:0] change;
+
+    // Instantiate DUT
+    vending_machine dut (
+        .clk(clk),
+        .rst_n(rst_n),
+        .coin5(coin5),
+        .coin10(coin10),
+        .selA(selA),
+        .selB(selB),
+        .selC(selC),
+        .cancel(cancel),
+        .dispA(dispA),
+        .dispB(dispB),
+        .dispC(dispC),
+        .change(change)
+    );
+
+    // Clock generation
+    always #5 clk = ~clk;
+
+    // Initial block to apply stimulus
+    initial begin
+        // Initialize
+        clk = 0;
+        rst_n = 0;
+        coin5 = 0;
+        coin10 = 0;
+        selA = 0;
+        selB = 0;
+        selC = 0;
+        cancel = 0;
+
+        // Wait for a few clock cycles and deassert reset
+        #20;
+        rst_n = 1;
+
+        // === TEST CASE 1: Buy Product A (₹5) with ₹5 ===
+        #10; coin5 = 1;
+        #10; coin5 = 0;
+
+        #10; selA = 1;
+        #10; selA = 0;
+
+        // === TEST CASE 2: Buy Product B (₹10) with ₹10 ===
+        #20; coin10 = 1;
+        #10; coin10 = 0;
+
+        #10; selB = 1;
+        #10; selB = 0;
+
+        // === TEST CASE 3: Buy Product C (₹15) with ₹20 → Expect ₹5 change ===
+        #20; coin10 = 1;
+        #10; coin10 = 0;
+        #10; coin10 = 1;
+        #10; coin10 = 0;
+
+        #10; selC = 1;
+        #10; selC = 0;
+
+        // === TEST CASE 4: Insert ₹5 + ₹10 and then Cancel → Expect ₹15 back ===
+        #20; coin5 = 1;
+        #10; coin5 = 0;
+        #10; coin10 = 1;
+        #10; coin10 = 0;
+
+        #10; cancel = 1;
+        #10; cancel = 0;
+
+        // === TEST CASE 5: Insert ₹5 and try to buy B (should fail), then add ₹5 and buy B ===
+        #20; coin5 = 1;
+        #10; coin5 = 0;
+
+        #10; selB = 1; // should not dispense
+        #10; selB = 0;
+
+        #20; coin5 = 1;
+        #10; coin5 = 0;
+
+        #10; selB = 1; // now should dispense
+        #10; selB = 0;
+
+        // End simulation
+        #50;
+        $display("Simulation completed.");
+        $finish;
+    end
+
+endmodule
